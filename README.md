@@ -3,7 +3,7 @@ PHP script to download recordings from reolink and yihack cameras to a local dir
 
 ### Example:
 
-I have something similar in my crontab on a router running openwrt and an ssd connected to its usb port. The script should also work in Windows.
+I have something similar in my crontab on a router running openwrt and an ssd connected to its usb port. The script should also work on Windows.
 
 ```
 timeout 29m ~/camsync.php --yihack="http://yicam:password@192.168.0.2:8080/" -d /mnt/usb/camera/yicam -l /tmp/camsync_yicam.flock -h 72 2>&1 >> /mnt/usb/camera/yicam.log
