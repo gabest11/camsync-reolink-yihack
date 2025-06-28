@@ -23,7 +23,7 @@ Recommended to use `timeout` to kill stuck downloads.
 
 # camtimelapse
 
-Once you have the video files downloaded from the camera, you can create a timelapse with this script.
+Once you have the video files downloaded from the camera, you can create a timelapse with this script. It can also process the directory structure of the automatic FTP uploads.
 
 ### Example
 
