@@ -5,23 +5,24 @@
 //ini_set('default_socket_timeout', 10);
 
 //var_dump($argv);
-$options = getopt('d:h:l:', ['yihack::', 'reolink::', 'throttle::']);
+$options = getopt('d:h:l:', ['yihack::', 'reolink::', 'throttle::', 'parallel:']);
 //var_dump($options);
 if(empty($options['d']) || !is_dir($options['d']) || empty($options['h']))
 {
 	die('bad args');
 }
 
-$dst = rtrim($options['d'], "\\/");
+$basedir = rtrim($options['d'], "\\/");
 $now = time();
 $since = strtotime(sprintf("-%d hours", (int)$options['h']), time());
 $throttle = !empty($options['throttle']) ? max(10, (int)$options['throttle'] / 10) * 1024 : 0; // bytes per 0.1 sec
+$parallel = !empty($options['parallel']) ? min(4, (int)$options['parallel']) : 1; // camera may crash with too many downloads
 
 function exec_timeout($cmd, $timeout)
 {
 	if(is_array($cmd) && version_compare(PHP_VERSION, '7.4.0', '<'))
 		$cmd = implode($cmd, ' ');
-	
+
 	$process = proc_open($cmd, array(), $pipes);
 
 	if(!is_resource($process)) return -1;
@@ -162,24 +163,24 @@ function reolink_request($baseurl, $token, $params)
 		];
 
 	$context  = stream_context_create($opts);
-	
+
 	$url = $baseurl.(!empty($token) ? '&token='.$token : '');
-	
+
 	echo $url.PHP_EOL;
 //print_r($params);
 
         $res = file_get_contents($url, false, $context);
-        
+
 //print_r($res);
 
         if(empty($res)) return false;
-        
+
         $res = json_decode($res, true);
-        
+
 //print_r($res);
-        
+
         if(empty($res) || !isset($res[0]['value'])) return false;
-        
+
         if(isset($res[0]['code']) && $res[0]['code'] != '0') die('reolink api return code '.$res[0]['code']);
 
         return $res[0]['value'];
@@ -196,7 +197,7 @@ if(!empty($options['l']))
 		die('already running'.PHP_EOL);
 }
 
-purgevideos($dst);
+purgevideos($basedir);
 
 // yihack
 
@@ -249,7 +250,7 @@ if(!empty($options['yihack']))
 	foreach($files as $f)
 	{
 //print_r($f);
-		$d = $dst.'/'.$f['path'];
+		$d = $basedir.'/'.$f['path'];
 
 		$reason = '';
 
@@ -296,7 +297,7 @@ if(!empty($options['yihack']))
 			@unlink($d);
 			if(!copy("http://$host:$port/record/".$f['path'], $d, $context)) break;
 		}
-	
+
 		touch($d, $f['mtime']);
 		//break;
 	}
@@ -316,23 +317,31 @@ if(!empty($options['reolink']))
 	$host = $m[3];
 	$port = !empty($m[5]) ? (int)$m[5] : 80;
 	$path = $m[6];
-	
+
 	$baseurl = "http://$host:$port/cgi-bin/api.cgi?cmd=";
-	
+
 	// Login
 
 	$res = reolink_request($baseurl.'Login', null, ['cmd' => 'Login', 'param' => ['User' => ['Version' => 0, 'userName' => $username, 'password' => $password]]]);
 //var_dump($res);
 	if(empty($res['Token']['name'])) die('no login token');
-	
+
 	$token = $res['Token']['name'];
 
 	// Logout
 
 	register_shutdown_function(function($u, $t) {if(!empty($t)) reolink_request($u.'Logout', $t, ['cmd' => 'Logout', 'param' => []]);}, $baseurl, $token);
 
+//$res = reolink_request($baseurl.'Reboot', $token, ['cmd' => 'Reboot']);
+//print_r($res);exit;
+//$res = reolink_request($baseurl.'GetUser', $token, ['cmd' => 'GetUser', 'action' => 1]);
+//print_r($res);//exit;
+//$res = reolink_request($baseurl.'GetOnline', $token, ['cmd' => 'GetOnline', 'action' => 1]);
+//print_r($res);//exit;
+//$res = reolink_request($baseurl.'AddUser', $token, ['cmd' => 'AddUser', 'param' => ['User' => ['userName' => 'guest', 'password' => '12345678', 'level' => 'guest']]]);
+//print_r($res);exit;
 //$res = reolink_request($baseurl.'GetEnc', $token, ['cmd' => 'GetEnc', 'action' => 1, 'param' => ['channel' => 0]]);
-//print_r($res);exit;	
+//print_r($res);exit;
 
 	// Search
 
@@ -357,7 +366,7 @@ if(!empty($options['reolink']))
 	       		];
 
 		$dt->setTime(23, 59, 59);
-        	
+
 	       	$endTime = [
 	       		'year' => (int)$dt->format('Y'),
 	       		'mon' => (int)$dt->format('m'),
@@ -377,12 +386,11 @@ if(!empty($options['reolink']))
 	            	];
 //print_r($param);
 		$res = reolink_request($baseurl.'Search', $token, ['cmd' => 'Search', 'action' => 0, 'param' => $param]);
-//print_r($res);
-//exit;
+//print_r($res); exit;
 		if(!isset($res['SearchResult']['File'])) continue;
-		
+
 		$files = [];
-		
+
 		foreach($res['SearchResult']['File'] as $file)
 		{
 			if(!is_numeric($file['StartTime']['year'])
@@ -395,7 +403,7 @@ if(!empty($options['reolink']))
 				print_r($file['StartTime']);
 				die('??? 2');
 			}
-			
+
 			if(!is_numeric($file['EndTime']['year'])
 			|| !is_numeric($file['EndTime']['mon'])
 			|| !is_numeric($file['EndTime']['day'])
@@ -422,134 +430,133 @@ if(!empty($options['reolink']))
 				$file['EndTime']['mon'],
 				$file['EndTime']['day'],
 				$file['EndTime']['year']);
-			
-			$files[] = $file;
+
+			if($file['start'] >= $since && $file['start'] < $now)
+			{
+				$files[] = $file;
+			}
 		}
-		
-		usort($files, function ($a, $b) { return $a['start'] > $b['start']; });
 
-		foreach($files as $file)
+		usort($files, function ($a, $b) { return $a['start'] > $b['start'] ? 1 : -1; });
+
+		while(!empty($files))
 		{
-			if($file['start'] < $since) continue;
-			if($file['start'] >= $now) break;
-			
-			//$subdir = sprintf("%04d/%02d/%02d", $file['StartTime']['year'], $file['StartTime']['mon'], $file['StartTime']['day']);
-			$subdir = sprintf("%04d-%02d-%02d", $file['StartTime']['year'], $file['StartTime']['mon'], $file['StartTime']['day']);
-			$dir = $dst.'/'.$subdir;
-			
-			if(!is_dir($dir))
+			$downloads = [];
+
+			for($i = 0; $i < $parallel && !empty($files); $i++)
 			{
-				echo '+D '.$subdir.PHP_EOL;
-				@mkdir($dir, 0777, true);
-			}
-			
-//			$n = basename($file['name']);
-			
-			$fn = sprintf('%02dH%02dM%02dS.mp4', //'%04d%02d%02d%02d%02d%02d.mp4', 
-				//$file['StartTime']['year'],
-				//$file['StartTime']['mon'],
-				//$file['StartTime']['day'],
-				$file['StartTime']['hour'],
-				$file['StartTime']['min'],
-				$file['StartTime']['sec']);
-			
-			$path = $dir.'/'.$fn;
-			
-			if(is_file($path) && filesize($path) == $file['size'] && filemtime($path) == $file['start'])
-			{
-				continue;
-				//break;
-			}
-			
-			echo '+F '.$subdir.'/'.$fn.' ('.$file['size'].')'.PHP_EOL;
-			
-			@unlink($path);
-			
-			$url = $baseurl.'Download&token='.$token.'&source='.urlencode($file['name']).'&output='.urlencode(basename($file['name']));
-//echo $url.PHP_EOL;
-/*
-			$cmd = [
-				'ffmpeg',
-				'-hide_banner',
-				'-loglevel', 'error',
-				'-y',
-				'-readrate', '3.0',
-				'-i', $url,
-				'-map', '0:v:0',
-				'-map', '0:a:0?',
-				'-c', 'copy',
-				$path
-				];
+				$file = array_shift($files);
 
-			$exitcode = exec_timeout($cmd, 180);
+				//$subdir = sprintf("%04d/%02d/%02d", $file['StartTime']['year'], $file['StartTime']['mon'], $file['StartTime']['day']);
+				$subdir = sprintf("%04d-%02d-%02d", $file['StartTime']['year'], $file['StartTime']['mon'], $file['StartTime']['day']);
+				$dir = $basedir.'/'.$subdir;
 
-			if($exitcode === false)
-			{
-				echo 'timeout'.PHP_EOL;
-				@unlink($path);
-				die('??? 4');
-			}
-
-			if($exitcode != 0)
-			{
-				echo (int)$exitcode.' = '.implode(' ', $cmd).PHP_EOL;
-				@unlink($path);
-*/
-				//if(!copy($url, $path)) die('??? 5');
-
-				$fpdst = fopen($path, "wb");
-
-				if(!empty($fpdst))
+				if(!is_dir($dir))
 				{
-					$fpsrc = fopen($url, "rb");
-					
-					if(!empty($fpsrc))
-					{
-						$tstart = microtime(true);
-						$total = 0;
-						
-						while(!feof($fpsrc))
-						{
-							$buff = '';
-							
-							if(empty($throttle))
-							{
-								$buff = fread($fpsrc, 8192);
-								if(empty($buff)) break;
-								fwrite($fpdst, $buff);
-							}
-							else
-							{
-								$t1 = microtime(true);
-								while(!feof($fpsrc) && strlen($buff) < $throttle)
-									$buff .= fread($fpsrc, 1024);
-								if(empty($buff)) break;
-								fwrite($fpdst, $buff);
-								$t21 = microtime(true) - $t1;
-								if($t21 < 0.1)
-								{
-									$sleep = 0.1 - $t21;
-									//echo strlen($buff).'B sleep '.$sleep.'s'.PHP_EOL;
-									//usleep(1000 * $sleep);
-									time_nanosleep($sleep % 1000, fmod($sleep, 1) * 1000000000);
-								}
-							}
-							
-							$total += strlen($buff);
-						}
-						
-						fclose($fpsrc);
+					echo '+D '.$subdir.PHP_EOL;
+					@mkdir($dir, 0777, true);
+				}
 
-						//echo (int)($total / (microtime(true) - $tstart) / 1024).' KB/s'.PHP_EOL;
+				//$src = $baseurl.'Download&token='.$token.'&source='.urlencode($file['name']).'&output='.urlencode(basename($file['name']));
+				// TODO: new E1 Zoom does not like urlencode
+				$src = $baseurl.'Download&token='.$token.'&source='.$file['name'].'&output='.basename($file['name']);
+
+				$fn = sprintf('%02dH%02dM%02dS.mp4', //'%04d%02d%02d%02d%02d%02d.mp4',
+					//$file['StartTime']['year'],
+					//$file['StartTime']['mon'],
+					//$file['StartTime']['day'],
+					$file['StartTime']['hour'],
+					$file['StartTime']['min'],
+					$file['StartTime']['sec']);
+
+				$dst = $dir.'/'.$fn;
+
+				//if(is_file($dst) && filesize($dst) == $file['size'] && filemtime($dst) == $file['start'])
+				if(is_file($dst) && ($file['size'] - filesize($dst)) < 1024*1024 && filemtime($dst) == $file['start'])
+				{
+					continue;
+					//break;
+				}
+
+				echo '+F '.$subdir.'/'.$fn.' ('.$file['size'].')'.PHP_EOL;
+
+				@unlink($dst);
+
+				$downloads[] = [
+					'src' => $src,
+					'dst' => $dst,
+					'file' => $file,
+					'fn' => $fn,
+					'dir' => $dir,
+					'subdir' => $subdir,
+					'fp' => fopen($dst, 'wb')];
+			}
+
+			if(empty($downloads)) continue;
+
+			$mh = curl_multi_init();
+			$map = new WeakMap();
+
+			foreach($downloads as $dl)
+			{
+				$ch = curl_init($dl['src']);
+				//curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+				curl_setopt($ch, CURLOPT_FILE, $dl['fp']);
+				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+				curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+				curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+				//curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle / count($downloads));
+				//curl_setopt($ch, CURLOPT_PROXY, 'localhost:8888'); curl_setopt($ch, CURLOPT_HEADER, 1);
+				curl_multi_add_handle($mh, $ch);
+				$map[$ch] = $dl;
+			}
+
+			do
+			{
+				$status = curl_multi_exec($mh, $still_running);
+
+				if($status !== CURLM_OK)
+				{
+					die(curl_multi_strerror(curl_multi_errno($mh)));
+				}
+
+				while(($info = curl_multi_info_read($mh)) !== false)
+				{
+					if($info['msg'] === CURLMSG_DONE)
+					{
+						$handle = $info['handle'];
+						curl_multi_remove_handle($mh, $handle);
+						$dl = $map[$handle];
+						fclose($dl['fp']);
+						touch($dl['dst'], $dl['file']['start']);
+
+						$res = $info['result'] === CURLE_OK ? curl_getinfo($handle, CURLINFO_HTTP_CODE) : curl_strerror($info['result']);
+
+						if($info['result'] !== CURLE_OK || $res != 200)
+						{
+							echo $dl['src'].' => '.$res.PHP_EOL;
+							@unlink($dl['dst']);
+							if(empty($dl['file']['retry'])) $dl['file']['retry'] = 0;
+							$dl['file']['retry']++;
+							if($dl['file']['retry'] <= 3) array_unshift($files, $dl['file']);
+							sleep(1);
+						}
 					}
 				}
-				
-				fclose($fpdst);
-				
-				if(filesize($path) != $file['size']) die('??? 6');
-//			}
-			
-			touch($path, $file['start']);
+
+				if($still_running)
+				{
+					if(($updatedHandles = curl_multi_select($mh)) === -1)
+					{
+						//throw new \Exception(curl_multi_strerror(curl_multi_errno($mh)));
+						echo 'curl_multi_select === -1'.PHP_EOL;
+					}
+				}
+			}
+			while($still_running);
+
+			curl_multi_close($mh);
+//exit;
 		}
 	}
 }
