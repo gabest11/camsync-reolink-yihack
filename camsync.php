@@ -534,11 +534,11 @@ if(!empty($options['reolink']))
 
 						if($info['result'] !== CURLE_OK || $res != 200)
 						{
-							echo $dl['src'].' => '.$res.PHP_EOL;
+							echo '*E '.$res.' '.$dl['src'].PHP_EOL;
 							@unlink($dl['dst']);
 							if(empty($dl['file']['retry'])) $dl['file']['retry'] = 0;
 							$dl['file']['retry']++;
-							if($dl['file']['retry'] <= 3) array_unshift($files, $dl['file']);
+							if($dl['file']['retry'] < 3) array_unshift($files, $dl['file']);
 							sleep(1);
 						}
 					}
