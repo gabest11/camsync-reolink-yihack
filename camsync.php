@@ -15,7 +15,7 @@ if(empty($options['d']) || !is_dir($options['d']) || empty($options['h']))
 $basedir = rtrim($options['d'], "\\/");
 $now = time();
 $since = strtotime(sprintf("-%d hours", (int)$options['h']), time());
-$throttle = !empty($options['throttle']) ? max(10, (int)$options['throttle'] / 10) * 1024 : 0; // bytes per 0.1 sec
+$throttle = !empty($options['throttle']) ? max(1, (int)$options['throttle']) * 1024 : 0; // kB/s
 $parallel = !empty($options['parallel']) ? min(4, (int)$options['parallel']) : 1; // camera may crash with too many downloads
 
 function exec_timeout($cmd, $timeout)
@@ -505,7 +505,7 @@ if(!empty($options['reolink']))
 				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 				curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 				curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-				//curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle / count($downloads));
+				curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle / count($downloads));
 				//curl_setopt($ch, CURLOPT_PROXY, 'localhost:8888'); curl_setopt($ch, CURLOPT_HEADER, 1);
 				curl_multi_add_handle($mh, $ch);
 				$map[$ch] = $dl;
