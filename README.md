@@ -17,6 +17,7 @@ Recommended to use `timeout` to kill stuck downloads.
 -h hours to download and auto-delete older files from the local mirror
 -l lock file to prevent multiple runs (optional)
 --throttle KB/s, this only works with reolink, as HD files can kill wifi, this isn't really a problem with yi-hack
+--parallel number of curl session to spawn, also only for reolink, they throttle http, but be careful, >4 can crash the camera
 --reolink http server has to be enabled on the camera
 --yihack needs ffmpeg to remux bogus mp4 files
 ```
