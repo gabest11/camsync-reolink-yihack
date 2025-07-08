@@ -146,7 +146,7 @@ foreach($jpgs as $time => $jpg)
 {
 	fprintf($fp, "file '%s'\n", $jpg);
 	fprintf($fp, "file_packet_meta fn '%s'\n", substr($jpg, strrpos($jpg, '\\') + 1));
-	fprintf($fp, "file_packet_meta t '%s'\n", strftime('%A %H:%M:%S', $time));
+	fprintf($fp, "file_packet_meta t '%s'\n", (new DateTime("@$time"))->format('l H:i:s'));
 	fprintf($fp, "file_packet_meta ts '%s'\n", $time);
 }
 

@@ -460,6 +460,11 @@ if(!empty($options['reolink']))
 				//$src = $baseurl.'Download&token='.$token.'&source='.urlencode($file['name']).'&output='.urlencode(basename($file['name']));
 				// TODO: new E1 Zoom does not like urlencode
 				$src = $baseurl.'Download&token='.$token.'&source='.$file['name'].'&output='.basename($file['name']);
+				
+				if(preg_match('/.*Rec(\w{3})(?:_|_DST)(\d{8})_(\d{6})_.*/', $file['name'], $m))
+				{
+					$src .= '&start='.$m[2].$m[3];
+				}
 
 				$fn = sprintf('%02dH%02dM%02dS.mp4', //'%04d%02d%02d%02d%02d%02d.mp4',
 					//$file['StartTime']['year'],
