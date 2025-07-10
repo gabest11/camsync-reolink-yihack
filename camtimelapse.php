@@ -142,11 +142,15 @@ $fp = fopen($list, 'w');
 
 ksort($jpgs);
 
+$timezone = new DateTimeZone(date_default_timezone_get());
+
 foreach($jpgs as $time => $jpg)
 {
+	$dt = new DateTime("@$time");
+	$dt->setTimezone($timezone);
 	fprintf($fp, "file '%s'\n", $jpg);
 	fprintf($fp, "file_packet_meta fn '%s'\n", substr($jpg, strrpos($jpg, '\\') + 1));
-	fprintf($fp, "file_packet_meta t '%s'\n", (new DateTime("@$time"))->format('l H:i:s'));
+	fprintf($fp, "file_packet_meta t '%s'\n", $dt->format('l H:i:s'));
 	fprintf($fp, "file_packet_meta ts '%s'\n", $time);
 }
 
