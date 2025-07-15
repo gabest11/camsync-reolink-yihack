@@ -68,7 +68,7 @@ function purgevideos($basedir, $dir = '.')
 
 	foreach($files as $fn)
 	{
-		if($fn[0] == '.') {$filecount--; continue;}
+		if($fn == '.' || $fn == '..') {$filecount--; continue;}
 
 		//$path = str_replace('/./', '/', $basedir.'/'.$dir.'/'.$fn);
 		$path = $basedir.'/'.($dir != '.' ? $dir.'/' : '').$fn;
@@ -97,9 +97,17 @@ function purgevideos($basedir, $dir = '.')
 				$time = mktime(0, 0, 0, $m[2], $m[3], $m[1]);
 			}
 
-			if(!empty($time) && $time >= $since) continue;
-
-			purgevideos($basedir, $subdir);
+			if(empty($time) || $time < $since)
+			{
+				if(purgevideos($basedir, $subdir) == 0)
+				{
+					if(!empty($time) && !is_link($basedir.'/'.$subdir))
+					{
+						camlog('-D '.$subdir);
+						rmdir($basedir.'/'.$subdir);
+					}
+				}
+			}
 		}
 		else
 		{
@@ -127,19 +135,16 @@ function purgevideos($basedir, $dir = '.')
 				$time = mktime($m[4], $m[5], $m[6], $m[2], $m[3], $m[1]);
 			}
 //echo date('c', $time).PHP_EOL;
-			if(empty($time) || $time >= $since - 3600) continue;
-
-			camlog('-F '.($dir != '.' ? $dir.'/' : '').$fn);
-			unlink($path);
-			$filecount--;
+			if(!empty($time) && $time < $since - 3600)
+			{
+				camlog('-F '.($dir != '.' ? $dir.'/' : '').$fn);
+				unlink($path);
+				$filecount--;
+			}
 		}
 	}
-//echo 'C '.$filecount.PHP_EOL;
-	if($filecount == 0 && $dir != '.')
-	{
-		camlog('-D '.$dir);
-		rmdir($basedir.'/'.$dir);
-	}
+
+	return $filecount;
 }
 
 function yihack_get_records($path)
