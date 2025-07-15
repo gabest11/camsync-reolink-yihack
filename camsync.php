@@ -7,7 +7,7 @@
 //var_dump($argv);
 $options = getopt('d:h:l:', ['yihack::', 'reolink::', 'throttle::', 'parallel:']);
 //var_dump($options);
-if(empty($options['d']) || !is_dir($options['d']) || empty($options['h']))
+if(empty($options['d']) || empty($options['h'])) // || !is_dir($options['d'])
 {
 	die('bad args');
 }
@@ -235,6 +235,12 @@ if(!empty($options['l']))
 	$fpflock = fopen($options['l'], 'w');
 	if(!flock($fpflock, LOCK_EX | LOCK_NB))
 		die('already running'.PHP_EOL);
+}
+
+if(!is_dir($basedir))
+{
+	camlog('+D '.$basedir);
+	@mkdir($basedir, 0777, true);
 }
 
 purgevideos($basedir);
@@ -531,7 +537,7 @@ if(!empty($options['reolink']))
 
 						if($info['result'] !== CURLE_OK || $res != 200)
 						{
-							camlog('*E '.$res.' '.$dl['src']);
+							camlog('*E '.$res.' '.$dl['src']); // could be a bad sd card or damaged file system
 							@unlink($dl['dst']);
 							if(empty($dl['file']['retry'])) $dl['file']['retry'] = 0;
 							$dl['file']['retry']++;
