@@ -18,12 +18,19 @@ $since = strtotime(sprintf("-%d hours", (int)$options['h']), time());
 $throttle = !empty($options['throttle']) ? max(1, (int)$options['throttle']) * 1024 : 0; // kB/s
 $parallel = !empty($options['parallel']) ? min(4, (int)$options['parallel']) : 1; // camera may crash with too many downloads
 
+function camlog($s, $timestamp = true, $newline = true)
+{
+	if($timestamp) echo '['.date('c').'] ';
+	echo $s;
+	if($newline) echo PHP_EOL;
+}
+
 function exec_timeout($cmd, $timeout)
 {
 	if(is_array($cmd) && version_compare(PHP_VERSION, '7.4.0', '<'))
-		$cmd = implode($cmd, ' ');
+		$cmd = implode(' ', $cmd);
 
-	$process = proc_open($cmd, array(), $pipes);
+	$process = proc_open($cmd, [], $pipes);
 
 	if(!is_resource($process)) return -1;
 
@@ -122,7 +129,7 @@ function purgevideos($basedir, $dir = '.')
 //echo date('c', $time).PHP_EOL;
 			if(empty($time) || $time >= $since - 3600) continue;
 
-			echo '-F '.($dir != '.' ? $dir.'/' : '').$fn.PHP_EOL;
+			camlog('-F '.($dir != '.' ? $dir.'/' : '').$fn);
 			unlink($path);
 			$filecount--;
 		}
@@ -130,7 +137,7 @@ function purgevideos($basedir, $dir = '.')
 //echo 'C '.$filecount.PHP_EOL;
 	if($filecount == 0 && $dir != '.')
 	{
-		echo '-D '.$dir.PHP_EOL;
+		camlog('-D '.$dir);
 		rmdir($basedir.'/'.$dir);
 	}
 }
@@ -141,10 +148,10 @@ function yihack_get_records($path)
 	global $host;
 	global $port;
 	$url = "http://$host:$port/$path";
-echo $url;
-$t = microtime(true);
+	camlog($url, true, false);
+	$t = microtime(true);
 	$s = file_get_contents($url, false, $context);
-printf(" %.2fs\n", microtime(true) - $t);
+	camlog(sprintf("%.2fs", microtime(true) - $t), false, true);
 	if(empty($s)) die('?');
 	$obj = json_decode($s, true);
 	if(empty($obj['records'])) die('no records?');
@@ -166,29 +173,57 @@ function reolink_request($baseurl, $token, $params)
 
 	$url = $baseurl.(!empty($token) ? '&token='.$token : '');
 
-	echo $url.PHP_EOL;
+	camlog($url);
 //print_r($params);
 
-        $res = file_get_contents($url, false, $context);
+    $res = file_get_contents($url, false, $context);
 
 //print_r($res);
 
-        if(empty($res)) return false;
+    if(empty($res)) return false;
 
-        $res = json_decode($res, true);
+    $res = json_decode($res, true);
 
 //print_r($res);
 
-        if(empty($res) || !isset($res[0]['value'])) return false;
+    if(empty($res) || !isset($res[0]['value'])) return false;
 
-        if(isset($res[0]['code']) && $res[0]['code'] != '0') die('reolink api return code '.$res[0]['code']);
+    if(isset($res[0]['code']) && $res[0]['code'] != '0') die('reolink api return code '.$res[0]['code']);
 
-        return $res[0]['value'];
+    return $res[0]['value'];
+}
+
+function reolink_to_time($dt)
+{
+	return [
+		'year' => (int)$dt->format('Y'),
+		'mon' => (int)$dt->format('m'),
+		'day' => (int)$dt->format('d'),
+		'hour' => (int)$dt->format('G'),
+		'min' => (int)$dt->format('i'),
+		'sec' => (int)$dt->format('s'),
+	];
+}
+
+function reolink_from_time($t)
+{
+	if(!is_numeric($t['year'])
+	|| !is_numeric($t['mon'])
+	|| !is_numeric($t['day'])
+	|| !is_numeric($t['hour'])
+	|| !is_numeric($t['min'])
+	|| !is_numeric($t['sec']))
+	{
+		print_r($t);
+		die('???');
+	}
+
+	return mktime($t['hour'], $t['min'], $t['sec'], $t['mon'], $t['day'], $t['year']);
 }
 
 //
 
-echo date('c', $since).' START'.PHP_EOL;
+camlog(date('c', $since).' START');
 
 if(!empty($options['l']))
 {
@@ -263,11 +298,11 @@ if(!empty($options['yihack']))
 
 		if(!is_dir(dirname($d)))
 		{
-			echo '+D '.dirname($f['path']).PHP_EOL;
+			camlog('+D '.dirname($f['path']));
 			@mkdir(dirname($d), 0777, true);
 		}
 
-		echo '+F '.$f['path'].$reason.PHP_EOL;
+		camlog('+F '.$f['path'].$reason);
 
 		$cmd = [
 			'ffmpeg',
@@ -286,14 +321,14 @@ if(!empty($options['yihack']))
 
 		if($exitcode === false)
 		{
-			echo 'timeout'.PHP_EOL;
+			camlog('timeout');
 			@unlink($d);
 			break;
 		}
 
 		if($exitcode != 0)
 		{
-			echo (int)$exitcode.' = '.implode(' ', $cmd).PHP_EOL;
+			camlog((int)$exitcode.' = '.implode(' ', $cmd));
 			@unlink($d);
 			if(!copy("http://$host:$port/record/".$f['path'], $d, $context)) break;
 		}
@@ -356,34 +391,21 @@ if(!empty($options['reolink']))
 
 	foreach($period as $dt)
 	{
-	       	$startTime = [
-       			'year' => (int)$dt->format('Y'),
-	       		'mon' => (int)$dt->format('m'),
-	       		'day' => (int)$dt->format('d'),
-	       		'hour' => (int)$dt->format('G'),
-	       		'min' => (int)$dt->format('i'),
-	       		'sec' => (int)$dt->format('s'),
-	       		];
+	    $startTime = reolink_to_time($dt);
 
 		$dt->setTime(23, 59, 59);
 
-	       	$endTime = [
-	       		'year' => (int)$dt->format('Y'),
-	       		'mon' => (int)$dt->format('m'),
-	       		'day' => (int)$dt->format('d'),
-	       		'hour' => (int)$dt->format('G'),
-	       		'min' => (int)$dt->format('i'),
-       			'sec' => (int)$dt->format('s'),
-       			];
+	    $endTime = reolink_to_time($dt);
 
-	    	$param = ['Search' => [
-	        		'channel' => 0,
-		        	'onlyStatus' => 0,
-	        		'streamType' => 'main',
-	        		'StartTime' => $startTime,
-		        	'EndTime' => $endTime,
-		        	]
-	            	];
+	    $param = [
+			'Search' => [
+				'channel' => 0,
+				'onlyStatus' => 0,
+				'streamType' => 'main',
+				'StartTime' => $startTime,
+				'EndTime' => $endTime,
+				]
+	    	];
 //print_r($param);
 		$res = reolink_request($baseurl.'Search', $token, ['cmd' => 'Search', 'action' => 0, 'param' => $param]);
 //print_r($res); exit;
@@ -393,43 +415,8 @@ if(!empty($options['reolink']))
 
 		foreach($res['SearchResult']['File'] as $file)
 		{
-			if(!is_numeric($file['StartTime']['year'])
-			|| !is_numeric($file['StartTime']['mon'])
-			|| !is_numeric($file['StartTime']['day'])
-			|| !is_numeric($file['StartTime']['hour'])
-			|| !is_numeric($file['StartTime']['min'])
-			|| !is_numeric($file['StartTime']['sec']))
-			{
-				print_r($file['StartTime']);
-				die('??? 2');
-			}
-
-			if(!is_numeric($file['EndTime']['year'])
-			|| !is_numeric($file['EndTime']['mon'])
-			|| !is_numeric($file['EndTime']['day'])
-			|| !is_numeric($file['EndTime']['hour'])
-			|| !is_numeric($file['EndTime']['min'])
-			|| !is_numeric($file['EndTime']['sec']))
-			{
-				print_r($file['EndTime']);
-				die('??? 3');
-			}
-
-			$file['start'] = mktime(
-				$file['StartTime']['hour'],
-				$file['StartTime']['min'],
-				$file['StartTime']['sec'],
-				$file['StartTime']['mon'],
-				$file['StartTime']['day'],
-				$file['StartTime']['year']);
-
-			$file['end'] = mktime(
-				$file['EndTime']['hour'],
-				$file['EndTime']['min'],
-				$file['EndTime']['sec'],
-				$file['EndTime']['mon'],
-				$file['EndTime']['day'],
-				$file['EndTime']['year']);
+			$file['start'] = reolink_from_time($file['StartTime']);
+			$file['end'] = reolink_from_time($file['EndTime']);
 
 			if($file['start'] >= $since && $file['start'] < $now)
 			{
@@ -453,14 +440,14 @@ if(!empty($options['reolink']))
 
 				if(!is_dir($dir))
 				{
-					echo '+D '.$subdir.PHP_EOL;
+					camlog('+D '.$subdir);
 					@mkdir($dir, 0777, true);
 				}
 
 				//$src = $baseurl.'Download&token='.$token.'&source='.urlencode($file['name']).'&output='.urlencode(basename($file['name']));
 				// TODO: new E1 Zoom does not like urlencode
 				$src = $baseurl.'Download&token='.$token.'&source='.$file['name'].'&output='.basename($file['name']);
-				
+
 				if(preg_match('/.*Rec(\w{3})(?:_|_DST)(\d{8})_(\d{6})_.*/', $file['name'], $m))
 				{
 					$src .= '&start='.$m[2].$m[3];
@@ -483,7 +470,7 @@ if(!empty($options['reolink']))
 					//break;
 				}
 
-				echo '+F '.$subdir.'/'.$fn.' ('.$file['size'].')'.PHP_EOL;
+				camlog('+F '.$subdir.'/'.$fn.' ('.$file['size'].')');
 
 				@unlink($dst);
 
@@ -510,7 +497,7 @@ if(!empty($options['reolink']))
 				curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 				curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
 				curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-				curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle / count($downloads));
+				if($throttle > 0) curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle / count($downloads));
 				//curl_setopt($ch, CURLOPT_PROXY, 'localhost:8888'); curl_setopt($ch, CURLOPT_HEADER, 1);
 				curl_multi_add_handle($mh, $ch);
 				$map[$ch] = $dl;
@@ -539,11 +526,11 @@ if(!empty($options['reolink']))
 
 						if($info['result'] !== CURLE_OK || $res != 200)
 						{
-							echo '*E '.$res.' '.$dl['src'].PHP_EOL;
+							camlog('*E '.$res.' '.$dl['src']);
 							@unlink($dl['dst']);
 							if(empty($dl['file']['retry'])) $dl['file']['retry'] = 0;
 							$dl['file']['retry']++;
-							if($dl['file']['retry'] < 3) array_unshift($files, $dl['file']);
+							if($dl['file']['retry'] < 3) $files[] = $dl['file']; //array_unshift($files, $dl['file']);
 							sleep(1);
 						}
 					}
@@ -554,7 +541,7 @@ if(!empty($options['reolink']))
 					if(($updatedHandles = curl_multi_select($mh)) === -1)
 					{
 						//throw new \Exception(curl_multi_strerror(curl_multi_errno($mh)));
-						echo 'curl_multi_select === -1'.PHP_EOL;
+						camlog('curl_multi_select === -1');
 					}
 				}
 			}
@@ -568,7 +555,7 @@ if(!empty($options['reolink']))
 
 //
 
-echo date('c', $since).' - '.date('c').' END'.PHP_EOL;
+camlog(date('c', $since).' - '.date('c').' END');
 
 if(!empty($fpflock))
 {
