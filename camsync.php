@@ -316,7 +316,7 @@ if(!empty($options['yihack']))
 			$reason = ' ('.date('c', $mtime).' != '.date('c', $f['mtime']).')';
 		}
 
-		if(!is_dir(dirname($d)))
+		if(!is_dir(dirname($dst)))
 		{
 			camlog('+D '.dirname($f['path']));
 			@mkdir(dirname($dst), 0777, true);
