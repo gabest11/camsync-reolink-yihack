@@ -236,6 +236,11 @@ if(!empty($options['l']))
 		die('already running'.PHP_EOL);
 }
 
+if(@disk_free_space(is_dir($basedir) ? $basedir : dirname($basedir)) < 1024*1024*1024)
+{
+	die('disk full'.PHP_EOL);
+}
+
 if(!is_dir($basedir))
 {
 	camlog('+D '.$basedir);
