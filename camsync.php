@@ -480,7 +480,6 @@ if(!empty($options['reolink']))
 			@unlink($dst);
 
 			$fp = fopen($dst, 'wb');
-//exit;
 
 			$ch = curl_init($download);
 			//curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
