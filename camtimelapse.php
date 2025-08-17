@@ -31,6 +31,7 @@ $framestep = isset($options['f']) ? (int)$options['f'] : 15;
 $verify = isset($options['v']);
 
 echo date('c', $since).PHP_EOL;
+if(!empty($length)) echo date('c', $since + $length).PHP_EOL;
 
 sleep(1);
 
@@ -41,11 +42,11 @@ function scanvideos($basedir, $dir = '.')
 	global $since;
 	global $length;
 	global $jpgs;
-	
+
 	foreach(scandir($basedir.'/'.$dir) as $fn)
 	{
 		if($fn[0] == '.') continue;
-		
+
 		$path = str_replace('/./', '/', $basedir.'/'.$dir.'/'.$fn);
 		
 		if(is_dir($path))
@@ -75,7 +76,7 @@ function scanvideos($basedir, $dir = '.')
 			{
 //echo 'subdir '.$subdir.' '.date('c', $time).' < '.date('c', $since).' ?'.PHP_EOL;
 				if($time < $since) continue;
-				if($length > 0 && $time > $since + $length) break;
+//				if($length > 0 && $time > $since + $length) break;
 			}
 			
 			scanvideos($basedir, $subdir);
