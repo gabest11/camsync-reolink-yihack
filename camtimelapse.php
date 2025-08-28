@@ -1,6 +1,6 @@
 <?php
 
-$options = getopt('i:o:h:m:l:c:f:v');
+$options = getopt('i:o:h:m:l:c:f:s:v');
 
 if(empty($options['m']))
 {
@@ -29,8 +29,10 @@ $dst = $dstdir.'/'.$dstfn.'.mkv';
 $list = $dstdir.'/'.$dstfn.'.txt';
 $framestep = isset($options['f']) ? (int)$options['f'] : 15;
 $verify = isset($options['v']);
+$scale = isset($options['s']) ? (int)$options['s'] : -1;
 
 echo date('c', $since).PHP_EOL;
+if(!empty($length)) echo date('c', $since + $length).PHP_EOL;
 
 sleep(1);
 
@@ -41,11 +43,11 @@ function scanvideos($basedir, $dir = '.')
 	global $since;
 	global $length;
 	global $jpgs;
-	
+
 	foreach(scandir($basedir.'/'.$dir) as $fn)
 	{
 		if($fn[0] == '.') continue;
-		
+
 		$path = str_replace('/./', '/', $basedir.'/'.$dir.'/'.$fn);
 		
 		if(is_dir($path))
@@ -75,7 +77,7 @@ function scanvideos($basedir, $dir = '.')
 			{
 //echo 'subdir '.$subdir.' '.date('c', $time).' < '.date('c', $since).' ?'.PHP_EOL;
 				if($time < $since) continue;
-				if($length > 0 && $time > $since + $length) break;
+//				if($length > 0 && $time > $since + $length) break;
 			}
 			
 			scanvideos($basedir, $subdir);
@@ -165,6 +167,7 @@ if($framestep > 0)
 	// $vf .= 'framestep=60,setpts=N/60/TB,fps=60';
 	//$cmd .= 'framestep=15,setpts=N/60/TB,fps=60';
 	$cmd .= 'framestep='.$framestep.',setpts=N/60/TB,fps=60';
+	if($scale > 0) $cmd .= ',scale=-1:'.$scale;
 	$cmd .= ',drawtext=text=\'%{metadata\:fn}\':font=Arial:fontcolor=White:fontsize=24:x=w-tw-10:y=10';
 	$cmd .= ',drawtext=text=\'%{metadata\:t}\':font=Arial:fontcolor=White:fontsize=24:x=w-tw-10:y=40';
 	$cmd .= ',drawtext=text=\'%{pts}\':font=Arial:fontcolor=White:fontsize=24:x=w-tw-10:y=70';
