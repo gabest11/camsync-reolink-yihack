@@ -5,7 +5,7 @@
 //ini_set('default_socket_timeout', 10);
 
 //var_dump($argv);
-$options = getopt('d:h:l:', ['yihack::', 'reolink::', 'throttle::']);
+$options = getopt('d:h:l:s:', ['yihack::', 'reolink::', 'throttle::']);
 //var_dump($options);
 if(empty($options['d']) || empty($options['h'])) // || !is_dir($options['d'])
 {
@@ -180,21 +180,21 @@ function reolink_request($baseurl, $token, $params)
 	camlog($url);
 //print_r($params);
 
-    $res = file_get_contents($url, false, $context);
+	$res = file_get_contents($url, false, $context);
 
 //print_r($res);
 
-    if(empty($res)) return false;
+	if(empty($res)) return false;
 
-    $res = json_decode($res, true);
+	$res = json_decode($res, true);
 
 //print_r($res);
 
-    if(empty($res) || !isset($res[0]['value'])) return false;
+	if(empty($res) || !isset($res[0]['value'])) return false;
 
-    if(isset($res[0]['code']) && $res[0]['code'] != '0') die('reolink api return code '.$res[0]['code']);
+	if(isset($res[0]['code']) && $res[0]['code'] != '0') die('reolink api return code '.$res[0]['code']);
 
-    return $res[0]['value'];
+	return $res[0]['value'];
 }
 
 function reolink_to_time($dt)
@@ -354,6 +354,7 @@ if(!empty($options['yihack']))
 if(!empty($options['reolink']))
 {
 	$src = $options['reolink'];
+	$stream = !empty($options['s']) ? $options['s'] : 'main';
 
 	if(!preg_match('/^http:\\/\\/([^:]+):([^@]+)@([^\\/:]+)(:([0-9]+))?(\\/.*)$/i', $src, $m))
 	{
@@ -416,13 +417,16 @@ if(!empty($options['reolink']))
 			'Search' => [
 				'channel' => 0,
 				'onlyStatus' => 0,
-				'streamType' => 'main',
+				'streamType' => $stream,
 				'StartTime' => $startTime,
 				'EndTime' => $endTime,
 				]
 	    	];
 //print_r($param);
-		$res = reolink_request($baseurl.'Search', $token, ['cmd' => 'Search', 'action' => 1, 'param' => $param]);
+		$res = reolink_request($baseurl.'Search', $token, [
+			'cmd' => 'Search', 
+			'action' => 1, 
+			'param' => $param]);
 //print_r($res); exit;
 		if(!isset($res['SearchResult']['File'])) continue;
 
