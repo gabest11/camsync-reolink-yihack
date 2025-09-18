@@ -392,6 +392,10 @@ if(!empty($options['reolink']))
 			{
 				//echo $d['name'].'/'.$f['name'].PHP_EOL;
 
+				if($stream == 'main' && strpos($f['name'], 'RecM') !== 0
+				|| $stream == 'sub' && strpos($f['name'], 'RecS') !== 0)
+					continue;
+
 				$mtime = strtotime($f['mtime']);
 
 				if($mtime >= $since && $mtime < $now)
