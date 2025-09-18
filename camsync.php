@@ -372,11 +372,12 @@ if(!empty($options['reolink']))
 	$baseurl = "http://$host:$port";
 	$files = [];
 	
-	$json_dir = json_decode(file_get_contents($baseurl.$path), true);
+	$Mp4Record = !empty($path) && strlen($path) > 1 ? $path : '/downloadfile/js/Mp4Record/';
+	$json_dir = json_decode(file_get_contents($baseurl.$Mp4Record), true);		
 
 	if(!empty($json_dir[0]['type']) && $json_dir[0]['type'] == 'directory')
 	{
-		date_default_timezone_set('UTC');
+		$path = $Mp4Record;
 
 		foreach($json_dir as $d)
 		{
