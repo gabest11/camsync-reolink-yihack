@@ -367,6 +367,99 @@ if(!empty($options['reolink']))
 	$port = !empty($m[5]) ? (int)$m[5] : 80;
 	$path = $m[6];
 
+	// see if json is available (/downloadfile/js/Mp4Record/...)
+
+	$baseurl = "http://$host:$port";
+	$files = [];
+	
+	$json_dir = json_decode(file_get_contents($baseurl.$path), true);
+
+	if(!empty($json_dir[0]['type']) && $json_dir[0]['type'] == 'directory')
+	{
+		date_default_timezone_set('UTC');
+
+		foreach($json_dir as $d)
+		{
+			if(strtotime($d['name'].' +1 day') < $since)
+				continue;
+
+			echo $d['name'].PHP_EOL;
+
+			$json_files = json_decode(file_get_contents($baseurl.$path.'/'.$d['name']), true);
+
+			foreach($json_files as $f)
+			{
+				//echo $d['name'].'/'.$f['name'].PHP_EOL;
+
+				$mtime = strtotime($f['mtime']);
+
+				if($mtime >= $since && $mtime < $now)
+				{
+					$files[] = [
+						'url' => $baseurl.$path.'/'.$d['name'].'/'.$f['name'],
+						'dir' => $d['name'],
+						'size' => $f['size'],
+						'mtime' => $mtime,
+					];
+				}
+			}
+		}
+
+		foreach($files as $f)
+		{
+			$subdir = date("Y-m-d", $f['mtime']);
+			$dir = $basedir.'/'.$subdir;
+
+			if(!is_dir($dir))
+			{
+				camlog('+D '.$subdir);
+				@mkdir($dir, 0777, true);
+			}
+
+			$fn = sprintf('%02dH%02dM%02dS.mp4',
+				date("H", $f['mtime']),
+				date("i", $f['mtime']),
+				date("s", $f['mtime']));
+
+			$dst = $dir.'/'.$fn;
+			$dstsize = @filesize($dst);
+
+			if(is_file($dst) && filesize($dst) == $f['size'] && filemtime($dst) == $f['mtime'])
+				continue;
+
+			camlog('+F '.$subdir.'/'.$fn.' ('.$f['size'].')');
+
+			@unlink($dst);
+
+			$fp = fopen($dst, 'wb');
+
+			$ch = curl_init($f['url']);
+			//curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+			curl_setopt($ch, CURLOPT_FILE, $fp);
+			curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+			if($throttle > 0) curl_setopt($ch, CURLOPT_MAX_RECV_SPEED_LARGE, $throttle);
+			//curl_setopt($ch, CURLOPT_PROXY, 'localhost:8888'); curl_setopt($ch, CURLOPT_HEADER, 1);
+
+			$res = curl_exec($ch);
+		
+			fclose($fp);
+
+			if($res === false)
+			{
+				camlog('failed to download');
+				exit;
+			}
+
+			touch($dst, $f['mtime']);
+		}
+
+		exit;
+	}
+
+	// fall back to HTTP API
+
 	$baseurl = "http://$host:$port/cgi-bin/api.cgi?cmd=";
 
 	// Login
